@@ -4,4 +4,5 @@ __pycache__/
 venv/
 .coverage
 .uv-cache/
-
+eventflow.db*
+eventflow_backup*.db

@@ -1,4 +1,4 @@
-"""Modelo de domínio do EventFlow para a entrega do Nível 1.
+"""Modelo de domínio do EventFlow.
 
 O módulo concentra as regras de negócio e evidencia relações de orientação a
 objetos: herança, polimorfismo, composição, associação e dependência.
@@ -7,8 +7,11 @@ objetos: herança, polimorfismo, composição, associação e dependência.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+import hashlib
+import hmac
+import secrets
 from typing import Iterable
 
 
@@ -32,17 +35,44 @@ class StatusContratacao(Enum):
 class Usuario(ABC):
     """Classe abstrata da qual os tipos de usuário herdam."""
 
-    def __init__(self, nome: str, email: str, senha: str) -> None:
+    ITERACOES_HASH = 120_000
+
+    def __init__(
+        self,
+        nome: str,
+        email: str,
+        senha: str | None,
+        *,
+        senha_hash: str | None = None,
+        senha_salt: str | None = None,
+        id_banco: int | None = None,
+    ) -> None:
         if not nome.strip():
             raise ValueError("O nome é obrigatório.")
         if "@" not in email:
             raise ValueError("Informe um e-mail válido.")
-        if not senha:
+        if senha_hash is None and not senha:
             raise ValueError("A senha é obrigatória.")
+        if (senha_hash is None) != (senha_salt is None):
+            raise ValueError("Hash e salt da senha devem ser informados juntos.")
 
         self.nome = nome.strip()
         self.email = email.strip().lower()
-        self.senha = senha
+        self.id_banco = id_banco
+        self.senha_salt = senha_salt or secrets.token_hex(16)
+        self.senha_hash = senha_hash or self._gerar_hash(senha or "")
+
+    def _gerar_hash(self, senha: str) -> str:
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            senha.encode("utf-8"),
+            bytes.fromhex(self.senha_salt),
+            self.ITERACOES_HASH,
+        ).hex()
+
+    def verificar_senha(self, senha: str) -> bool:
+        """Compara a senha sem armazená-la em texto puro."""
+        return hmac.compare_digest(self.senha_hash, self._gerar_hash(senha))
 
     @abstractmethod
     def descricao_perfil(self) -> str:
@@ -50,8 +80,24 @@ class Usuario(ABC):
 
 
 class Organizador(Usuario):
-    def __init__(self, nome: str, email: str, senha: str) -> None:
-        super().__init__(nome, email, senha)
+    def __init__(
+        self,
+        nome: str,
+        email: str,
+        senha: str | None,
+        *,
+        senha_hash: str | None = None,
+        senha_salt: str | None = None,
+        id_banco: int | None = None,
+    ) -> None:
+        super().__init__(
+            nome,
+            email,
+            senha,
+            senha_hash=senha_hash,
+            senha_salt=senha_salt,
+            id_banco=id_banco,
+        )
         self._eventos: list[Evento] = []
 
     @property
@@ -124,9 +170,37 @@ class GerenciadorUsuarios:
     def autenticar(self, email: str, senha: str) -> Usuario:
         email_normalizado = email.strip().lower()
         for usuario in self._usuarios:
-            if usuario.email == email_normalizado and usuario.senha == senha:
+            if usuario.email == email_normalizado and usuario.verificar_senha(senha):
                 return usuario
         raise ValueError("E-mail ou senha incorretos.")
+
+    def restaurar(
+        self,
+        id_banco: int,
+        nome: str,
+        email: str,
+        tipo: str,
+        senha_hash: str,
+        senha_salt: str,
+    ) -> Usuario:
+        """Reconstrói um usuário persistido sem conhecer a senha original."""
+        tipos = {
+            "organizador": Organizador,
+            "participante": Participante,
+        }
+        classe_usuario = tipos.get(tipo)
+        if classe_usuario is None:
+            raise ValueError(f"Tipo de usuário desconhecido no banco: {tipo}.")
+        usuario = classe_usuario(
+            nome,
+            email,
+            None,
+            senha_hash=senha_hash,
+            senha_salt=senha_salt,
+            id_banco=id_banco,
+        )
+        self._usuarios.append(usuario)
+        return usuario
 
 
 @dataclass(frozen=True)
@@ -136,6 +210,7 @@ class EquipeDivulgacao:
     nome: str
     servicos: str
     preco: float
+    id_banco: int | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.nome.strip() or not self.servicos.strip():
@@ -150,6 +225,7 @@ class Inscricao:
 
     participante: Participante
     status: StatusInscricao
+    id_banco: int | None = field(default=None, compare=False)
 
 
 @dataclass
@@ -158,6 +234,7 @@ class ContratacaoDivulgacao:
 
     equipe: EquipeDivulgacao
     status: StatusContratacao = StatusContratacao.ATIVA
+    id_banco: int | None = field(default=None, compare=False)
 
 
 class Evento:
@@ -189,6 +266,7 @@ class Evento:
         self.categoria = categoria.strip()
         self.vagas = vagas
         self.organizador = organizador
+        self.id_banco: int | None = None
         self.status = StatusEvento.RASCUNHO
         self._inscricoes: list[Inscricao] = []
         self._contratacoes: list[ContratacaoDivulgacao] = []
