@@ -1,21 +1,25 @@
-# EventFlow — Desk App I (Nível 1)
+# EventFlow — Desk App II (Nível 2)
 
-Modelagem orientada a objetos de um sistema de gerenciamento de eventos,
-desenvolvida em Python apenas para os requisitos do **Nível 1**.
+Sistema de gerenciamento de eventos em Python com um menu de terminal
+totalmente funcional. Esta versão atende ao **Nível 2**: todos os modelos e
+recursos podem ser acessados por menus, e os dados são mantidos em memória
+enquanto o programa está aberto.
 
-Esta etapa não implementa menu, banco de dados ou interface gráfica. Esses
-itens pertencem aos níveis seguintes e ficaram intencionalmente fora do
-escopo.
+Ainda não há banco de dados nem interface gráfica. Esses recursos pertencem,
+respectivamente, aos níveis 3 e 4.
 
 ## O que está implementado
 
-- cadastro e autenticação de organizadores e participantes;
-- criação, edição, publicação e cancelamento de eventos;
-- demonstração e cancelamento de interesse;
+- menu principal com cadastro, login e consulta de eventos publicados;
+- menus separados de organizador e participante;
+- criação, edição, publicação, consulta e cancelamento de eventos;
+- demonstração e cancelamento de interesse em eventos;
 - controle de vagas e promoção automática da lista de espera;
-- contratação, cancelamento e substituição de equipes de divulgação;
-- relatório resumido dos eventos;
-- validações de permissão e das regras de negócio.
+- cadastro, contratação, cancelamento e substituição de equipes de divulgação;
+- consulta de inscrições e contratações;
+- relatório resumido dos eventos de cada organizador;
+- validação de entradas, permissões e regras de negócio;
+- cenário opcional de demonstração para agilizar os testes manuais.
 
 ## Relações de orientação a objetos
 
@@ -28,15 +32,29 @@ escopo.
 | Dependência | `RelatorioEventos` usa os eventos recebidos somente ao gerar o relatório |
 | Agregação | `GerenciadorUsuarios` reúne usuários que existem independentemente |
 
-O diagrama completo está em [uml_eventflow.md](uml_eventflow.md).
+O diagrama de domínio completo está em [uml_eventflow.md](uml_eventflow.md).
+
+## Menus disponíveis
+
+O **menu principal** permite cadastrar usuários, entrar em uma conta, consultar
+eventos publicados e carregar dados opcionais de demonstração.
+
+Depois do login, o **organizador** pode administrar seus eventos, inscrições,
+equipes, contratações e relatório. O **participante** pode consultar eventos,
+demonstrar interesse, acompanhar suas inscrições e cancelar o interesse.
+
+Todas as listas numeradas aceitam `0` para voltar. Operações inválidas exibem
+uma mensagem e retornam ao menu, sem encerrar o programa.
 
 ## Estrutura
 
 ```text
 .
 ├── modelos.py          # classes e regras de negócio
-├── main.py             # demonstração linear de todas as funcionalidades
-├── test_modelos.py     # testes automatizados
+├── aplicacao.py        # estado em memória e menus interativos
+├── main.py             # ponto de entrada do programa
+├── test_modelos.py     # testes das regras de negócio
+├── test_aplicacao.py   # testes da aplicação e do fluxo de menus
 ├── uml_eventflow.md    # diagrama de classes em Mermaid
 └── README.md
 ```
@@ -46,7 +64,7 @@ O diagrama completo está em [uml_eventflow.md](uml_eventflow.md).
 É necessário ter Python 3.10 ou mais recente. O projeto usa apenas a biblioteca
 padrão, portanto não há dependências para instalar.
 
-Para ver a demonstração completa:
+Para iniciar o menu:
 
 ```powershell
 python .\main.py
@@ -66,17 +84,28 @@ uv run --python 3.14 --no-project python .\main.py
 uv run --python 3.14 --no-project python -m unittest -v
 ```
 
-O código retorna uma falha visível se alguma regra não se comportar como
-esperado. O diagrama Mermaid é renderizado automaticamente ao abrir o arquivo
-no GitHub.
+Ao fechar o programa, todos os cadastros são descartados. A opção **Carregar
+dados de demonstração** cria as contas abaixo, um evento publicado e duas
+equipes de divulgação:
 
-## Checklist da entrega do Nível 1
+| Perfil | E-mail | Senha |
+| --- | --- | --- |
+| Organizador | `ana@eventflow.com` | `123` |
+| Participante | `bia@eventflow.com` | `123` |
+| Participante | `caio@eventflow.com` | `123` |
+
+O diagrama Mermaid é renderizado automaticamente ao abrir o arquivo no GitHub.
+
+## Checklist da entrega do Nível 2
 
 - [x] modelagem com todas as relações solicitadas;
-- [x] funcionalidades executáveis sem interface gráfica;
+- [x] menu principal funcional;
+- [x] menus específicos para todos os perfis;
+- [x] acesso a todos os modelos e funcionalidades pelo menu;
+- [x] dados mantidos em memória, sem banco de dados;
 - [x] testes automatizados;
 - [x] diagrama UML;
-- [ ] criar e publicar o repositório no GitHub;
-- [ ] gravar o vídeo de até 3 minutos;
+- [ ] publicar a versão atualizada no repositório público;
+- [ ] gravar o vídeo de até 6 minutos;
 - [ ] adicionar os links públicos do repositório e do vídeo na entrega.
 
