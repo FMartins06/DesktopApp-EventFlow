@@ -105,7 +105,7 @@ O diagrama Mermaid é renderizado automaticamente ao abrir o arquivo no GitHub.
 - [x] dados mantidos em memória, sem banco de dados;
 - [x] testes automatizados;
 - [x] diagrama UML;
-- [ ] publicar a versão atualizada no repositório público;
-- [ ] gravar o vídeo de até 6 minutos;
-- [ ] adicionar os links públicos do repositório e do vídeo na entrega.
+- [x] publicar a versão atualizada no repositório público;
+- [x] gravar o vídeo de até 6 minutos;
+- [x] adicionar os links públicos do repositório e do vídeo na entrega.
 
