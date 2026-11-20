@@ -76,7 +76,7 @@ no GitHub.
 - [x] funcionalidades executáveis sem interface gráfica;
 - [x] testes automatizados;
 - [x] diagrama UML;
-- [ ] criar e publicar o repositório no GitHub;
-- [ ] gravar o vídeo de até 3 minutos;
-- [ ] adicionar os links públicos do repositório e do vídeo na entrega.
+- [x] criar e publicar o repositório no GitHub;
+- [x] gravar o vídeo de até 3 minutos;
+- [x] adicionar os links públicos do repositório e do vídeo na entrega.
 
