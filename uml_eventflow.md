@@ -1,8 +1,8 @@
-# Diagrama de classes — EventFlow Níveis 1 e 2
+# Diagrama de classes — EventFlow Níveis 1 a 3
 
-O diagrama abaixo usa a notação UML: triângulo para herança, losango preto
-para composição, losango branco para agregação, linha para associação e linha
-tracejada para dependência.
+O diagrama usa triângulo para herança, losango preto para composição, losango
+branco para agregação, linha para associação e linha tracejada para
+dependência.
 
 ```mermaid
 classDiagram
@@ -10,9 +10,12 @@ classDiagram
 
     class Usuario {
         <<abstract>>
+        +id_banco: int
         +nome: str
         +email: str
-        +senha: str
+        +senha_hash: str
+        +senha_salt: str
+        +verificar_senha(senha) bool
         +descricao_perfil() str*
     }
 
@@ -28,11 +31,13 @@ classDiagram
 
     class GerenciadorUsuarios {
         -usuarios: list~Usuario~
-        +cadastrar(nome, email, senha, tipo) Usuario
+        +cadastrar(...) Usuario
         +autenticar(email, senha) Usuario
+        +restaurar(...) Usuario
     }
 
     class Evento {
+        +id_banco: int
         +titulo: str
         +descricao: str
         +data_hora: str
@@ -44,24 +49,27 @@ classDiagram
         +editar(organizador, ...)
         +demonstrar_interesse(participante) Inscricao
         +cancelar_interesse(participante) Inscricao
-        +contratar_equipe(organizador, equipe) ContratacaoDivulgacao
-        +cancelar_contratacao(organizador, contratacao)
-        +substituir_equipe(organizador, contratacao, equipe)
+        +contratar_equipe(...) ContratacaoDivulgacao
+        +cancelar_contratacao(...)
+        +substituir_equipe(...)
         +cancelar(organizador)
     }
 
     class Inscricao {
+        +id_banco: int
         +participante: Participante
         +status: StatusInscricao
     }
 
     class EquipeDivulgacao {
+        +id_banco: int
         +nome: str
         +servicos: str
         +preco: float
     }
 
     class ContratacaoDivulgacao {
+        +id_banco: int
         +equipe: EquipeDivulgacao
         +status: StatusContratacao
     }
@@ -70,14 +78,26 @@ classDiagram
         +gerar(eventos) str
     }
 
+    class BancoDados {
+        +caminho: str
+        +carregar() tuple
+        +salvar(usuarios, equipes, eventos)
+        +resumo() dict
+        +fechar()
+    }
+
     class SistemaEventFlow {
+        +banco: BancoDados
         +usuarios: GerenciadorUsuarios
         -equipes: list~EquipeDivulgacao~
         +eventos: tuple~Evento~
         +eventos_publicados: tuple~Evento~
+        +cadastrar_usuario(...) Usuario
+        +criar_evento(...) Evento
         +cadastrar_equipe(...) EquipeDivulgacao
-        +inscricoes_de(participante) tuple
-        +carregar_dados_demo()
+        +demonstrar_interesse(...) Inscricao
+        +persistir()
+        +resumo_banco() dict
     }
 
     class MenuEventFlow {
@@ -94,33 +114,42 @@ classDiagram
     Inscricao "0..*" --> "1" Participante : associação
     ContratacaoDivulgacao "0..*" --> "1" EquipeDivulgacao : associação
     RelatorioEventos ..> Evento : dependência
-    SistemaEventFlow *-- GerenciadorUsuarios : mantém em memória
+    SistemaEventFlow *-- GerenciadorUsuarios : coordena
+    SistemaEventFlow *-- BancoDados : persiste
     SistemaEventFlow o-- EquipeDivulgacao : cataloga
-    SistemaEventFlow ..> Evento : consulta
+    SistemaEventFlow ..> Evento : executa operações
+    BancoDados ..> Usuario : reconstrói
+    BancoDados ..> Evento : salva
     MenuEventFlow *-- SistemaEventFlow : controla
     MenuEventFlow ..> Usuario : apresenta
 ```
 
-## Onde está cada relação
+## Relações de orientação a objetos
 
 - **Herança:** `Organizador` e `Participante` especializam `Usuario`.
 - **Polimorfismo:** os dois subtipos implementam `descricao_perfil()` de formas
-  diferentes; uma coleção de `Usuario` chama o mesmo método sem conhecer o
-  subtipo concreto.
+  diferentes; o menu chama o mesmo método sem conhecer a implementação.
 - **Composição:** `Inscricao` e `ContratacaoDivulgacao` são criadas e
-  controladas exclusivamente por `Evento`; ao cancelar o evento, suas partes
-  ativas também são canceladas.
-- **Associação:** um `Organizador` organiza eventos, uma `Inscricao` referencia
-  um `Participante` e uma contratação referencia uma `EquipeDivulgacao`.
-- **Dependência:** `RelatorioEventos` recebe objetos `Evento` apenas para gerar
-  a saída e não os mantém como atributos.
-- **Agregação (relação adicional):** `GerenciadorUsuarios` reúne usuários, mas
-  eles não dependem dele para existir.
+  controladas exclusivamente por `Evento`; cancelar o evento cancela suas
+  partes ativas.
+- **Associação:** um organizador administra eventos, uma inscrição referencia
+  um participante e uma contratação referencia uma equipe.
+- **Dependência:** `RelatorioEventos` recebe eventos somente enquanto gera o
+  relatório e não os guarda como atributos.
+- **Agregação:** `GerenciadorUsuarios` reúne usuários que podem existir
+  independentemente dele.
 
-## Camada de aplicação do Nível 2
+## Camadas do Nível 3
 
-- **`SistemaEventFlow`:** reúne temporariamente usuários, eventos e equipes e
-  oferece as consultas necessárias aos menus. Nada é salvo após o encerramento.
-- **`MenuEventFlow`:** apresenta as opções, valida as entradas e encaminha cada
-  ação ao modelo responsável, sem duplicar as regras de negócio.
+- **Domínio (`modelos.py`):** contém entidades, estados e regras de negócio.
+- **Banco (`schema.sql`):** define em SQL as tabelas, chaves, relacionamentos e
+  restrições de integridade.
+- **Persistência (`banco_dados.py`):** executa o esquema e consultas SQL em
+  transações, além de reconstruir as relações entre os objetos.
+- **Aplicação (`aplicacao.py`):** coordena domínio e banco, persistindo cada
+  alteração concluída.
+- **Interface (`MenuEventFlow`):** recebe e valida entradas do terminal e exibe
+  os resultados.
 
+O esquema das tabelas e suas cardinalidades está em
+[modelo_banco.md](modelo_banco.md).

@@ -1,12 +1,15 @@
 """Camada de aplicação e menu de terminal do EventFlow.
 
-Esta camada conecta os modelos de domínio a uma interface interativa. Todos os
-dados permanecem somente em memória
+Esta camada conecta os modelos de domínio à interface interativa e garante que
+cada alteração seja persistida no banco SQLite.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from pathlib import Path
+
+from banco_dados import BancoDados
 
 from modelos import (
     ContratacaoDivulgacao,
@@ -24,13 +27,24 @@ from modelos import (
 )
 
 
-class SistemaEventFlow:
-    """Mantém o estado temporário usado durante a execução do programa."""
+CAMINHO_BANCO_PADRAO = Path(__file__).with_name("eventflow.db")
 
-    def __init__(self) -> None:
-        self.usuarios = GerenciadorUsuarios()
-        self._equipes: list[EquipeDivulgacao] = []
-        self._dados_demo_carregados = False
+
+class SistemaEventFlow:
+    """Coordena as regras de negócio e a persistência do estado."""
+
+    def __init__(
+        self,
+        caminho_banco: str | Path = CAMINHO_BANCO_PADRAO,
+    ) -> None:
+        self.banco = BancoDados(caminho_banco)
+        self.usuarios, self._equipes = self.banco.carregar()
+        emails = {usuario.email for usuario in self.usuarios.usuarios}
+        self._dados_demo_carregados = {
+            "ana@eventflow.com",
+            "bia@eventflow.com",
+            "caio@eventflow.com",
+        }.issubset(emails)
 
     @property
     def equipes(self) -> tuple[EquipeDivulgacao, ...]:
@@ -52,6 +66,71 @@ class SistemaEventFlow:
             if evento.status == StatusEvento.PUBLICADO
         )
 
+    def persistir(self) -> None:
+        self.banco.salvar(self.usuarios.usuarios, self._equipes, self.eventos)
+
+    def cadastrar_usuario(
+        self,
+        nome: str,
+        email: str,
+        senha: str,
+        tipo: str,
+    ) -> Usuario:
+        usuario = self.usuarios.cadastrar(nome, email, senha, tipo)
+        self.persistir()
+        return usuario
+
+    def criar_evento(
+        self,
+        organizador: Organizador,
+        titulo: str,
+        descricao: str,
+        data_hora: str,
+        local: str,
+        categoria: str,
+        vagas: int,
+    ) -> Evento:
+        evento = organizador.criar_evento(
+            titulo,
+            descricao,
+            data_hora,
+            local,
+            categoria,
+            vagas,
+        )
+        self.persistir()
+        return evento
+
+    def editar_evento(
+        self,
+        organizador: Organizador,
+        evento: Evento,
+        titulo: str,
+        descricao: str,
+        data_hora: str,
+        local: str,
+        categoria: str,
+        vagas: int,
+    ) -> None:
+        evento.editar(
+            organizador,
+            titulo,
+            descricao,
+            data_hora,
+            local,
+            categoria,
+            vagas,
+        )
+        self.persistir()
+
+    def publicar_evento(self, organizador: Organizador, evento: Evento) -> None:
+        evento.publicar(organizador)
+        self.persistir()
+
+    def cancelar_evento(self, organizador: Organizador, evento: Evento) -> None:
+        evento.cancelar(organizador)
+        self.persistir()
+
     def cadastrar_equipe(
         self,
         nome: str,
@@ -66,7 +145,56 @@ class SistemaEventFlow:
             raise ValueError("Já existe uma equipe com esse nome.")
         equipe = EquipeDivulgacao(nome.strip(), servicos.strip(), preco)
         self._equipes.append(equipe)
+        self.persistir()
         return equipe
+
+    def contratar_equipe(
+        self,
+        organizador: Organizador,
+        evento: Evento,
+        equipe: EquipeDivulgacao,
+    ) -> ContratacaoDivulgacao:
+        contratacao = evento.contratar_equipe(organizador, equipe)
+        self.persistir()
+        return contratacao
+
+    def cancelar_contratacao(
+        self,
+        organizador: Organizador,
+        evento: Evento,
+        contratacao: ContratacaoDivulgacao,
+    ) -> None:
+        evento.cancelar_contratacao(organizador, contratacao)
+        self.persistir()
+
+    def substituir_equipe(
+        self,
+        organizador: Organizador,
+        evento: Evento,
+        contratacao: ContratacaoDivulgacao,
+        nova_equipe: EquipeDivulgacao,
+    ) -> ContratacaoDivulgacao:
+        nova = evento.substituir_equipe(organizador, contratacao, nova_equipe)
+        self.persistir()
+        return nova
+
+    def demonstrar_interesse(
+        self,
+        evento: Evento,
+        participante: Participante,
+    ) -> Inscricao:
+        inscricao = evento.demonstrar_interesse(participante)
+        self.persistir()
+        return inscricao
+
+    def cancelar_interesse(
+        self,
+        evento: Evento,
+        participante: Participante,
+    ) -> Inscricao:
+        inscricao = evento.cancelar_interesse(participante)
+        self.persistir()
+        return inscricao
 
     def inscricoes_de(
         self,
@@ -128,17 +256,25 @@ class SistemaEventFlow:
             vagas=1,
         )
         evento.publicar(ana)
-        self.cadastrar_equipe(
-            "Mídia Local",
-            "Divulgação em rádio e imprensa regional",
-            250.0,
+        self._equipes.append(
+            EquipeDivulgacao(
+                "Mídia Local",
+                "Divulgação em rádio e imprensa regional",
+                250.0,
+            )
         )
-        self.cadastrar_equipe(
-            "Alcance Digital",
-            "Campanha em redes sociais",
-            400.0,
+        self._equipes.append(
+            EquipeDivulgacao(
+                "Alcance Digital",
+                "Campanha em redes sociais",
+                400.0,
+            )
         )
         self._dados_demo_carregados = True
+        self.persistir()
+
+    def resumo_banco(self) -> dict[str, int]:
+        return self.banco.resumo()
 
 
 class MenuEventFlow:
@@ -155,8 +291,11 @@ class MenuEventFlow:
         self._saida = saida
 
     def executar(self) -> None:
-        self._titulo("EVENTFLOW — DESK APP II")
-        self._escrever("Dados mantidos apenas durante esta execução.")
+        self._titulo("EVENTFLOW — DESK APP III")
+        self._escrever(
+            f"Banco SQLite ativo: {self.sistema.banco.caminho}\n"
+            "Todas as alterações são salvas permanentemente."
+        )
 
         try:
             while True:
@@ -166,9 +305,13 @@ class MenuEventFlow:
                     "2 - Entrar\n"
                     "3 - Ver eventos publicados\n"
                     "4 - Carregar dados de demonstração\n"
+                    "5 - Ver resumo do banco de dados\n"
                     "0 - Sair"
                 )
-                opcao = self._ler_opcao("Escolha: ", {"0", "1", "2", "3", "4"})
+                opcao = self._ler_opcao(
+                    "Escolha: ",
+                    {"0", "1", "2", "3", "4", "5"},
+                )
 
                 if opcao == "0":
                     self._escrever("EventFlow encerrado. Até logo!")
@@ -179,8 +322,10 @@ class MenuEventFlow:
                     self._proteger(self._entrar)
                 elif opcao == "3":
                     self._listar_eventos_publicados()
-                else:
+                elif opcao == "4":
                     self._proteger(self._carregar_demo)
+                else:
+                    self._mostrar_resumo_banco()
         except (EOFError, KeyboardInterrupt):
             self._escrever("\nEventFlow encerrado.")
 
@@ -194,7 +339,7 @@ class MenuEventFlow:
             {"1", "2"},
         )
         tipo = "organizador" if tipo_opcao == "1" else "participante"
-        usuario = self.sistema.usuarios.cadastrar(nome, email, senha, tipo)
+        usuario = self.sistema.cadastrar_usuario(nome, email, senha, tipo)
         self._escrever(f"Usuário {usuario.nome} cadastrado como {tipo}.")
 
     def _entrar(self) -> None:
@@ -215,6 +360,12 @@ class MenuEventFlow:
             "Dados carregados. Contas: ana@eventflow.com, "
             "bia@eventflow.com e caio@eventflow.com; senha: 123."
         )
+
+    def _mostrar_resumo_banco(self) -> None:
+        self._titulo("BANCO DE DADOS SQLITE")
+        self._escrever(f"Arquivo: {self.sistema.banco.caminho}")
+        for tabela, quantidade in self.sistema.resumo_banco().items():
+            self._escrever(f"{tabela}: {quantidade} registro(s)")
 
     def _menu_organizador(self, organizador: Organizador) -> None:
         while True:
@@ -256,7 +407,8 @@ class MenuEventFlow:
 
     def _criar_evento(self, organizador: Organizador) -> None:
         self._titulo("CRIAR EVENTO")
-        evento = organizador.criar_evento(
+        evento = self.sistema.criar_evento(
+            organizador=organizador,
             titulo=self._ler_obrigatorio("Título: "),
             descricao=self._ler_obrigatorio("Descrição: "),
             data_hora=self._ler_obrigatorio("Data e hora: "),
@@ -318,8 +470,9 @@ class MenuEventFlow:
         local = self._ler_com_padrao("Local", evento.local)
         categoria = self._ler_com_padrao("Categoria", evento.categoria)
         vagas = self._ler_inteiro_com_padrao("Vagas", evento.vagas)
-        evento.editar(
+        self.sistema.editar_evento(
             organizador,
+            evento,
             titulo,
             descricao,
             data_hora,
@@ -330,14 +483,14 @@ class MenuEventFlow:
         self._escrever("Evento atualizado.")
 
     def _publicar_evento(self, organizador: Organizador, evento: Evento) -> None:
-        evento.publicar(organizador)
+        self.sistema.publicar_evento(organizador, evento)
         self._escrever("Evento publicado e visível para os participantes.")
 
     def _cancelar_evento(self, organizador: Organizador, evento: Evento) -> None:
         if not self._confirmar("Cancelar o evento e suas operações ativas?"):
             self._escrever("Cancelamento não realizado.")
             return
-        evento.cancelar(organizador)
+        self.sistema.cancelar_evento(organizador, evento)
         self._escrever("Evento cancelado.")
 
     def _cadastrar_equipe(self) -> None:
@@ -353,7 +506,7 @@ class MenuEventFlow:
         equipe = self._selecionar_equipe()
         if equipe is None:
             return
-        contratacao = evento.contratar_equipe(organizador, equipe)
+        contratacao = self.sistema.contratar_equipe(organizador, evento, equipe)
         self._escrever(
             f"Equipe '{contratacao.equipe.nome}' contratada para o evento."
         )
@@ -374,7 +527,7 @@ class MenuEventFlow:
         if not self._confirmar(f"Cancelar a contratação de {contratacao.equipe.nome}?"):
             self._escrever("Cancelamento não realizado.")
             return
-        evento.cancelar_contratacao(organizador, contratacao)
+        self.sistema.cancelar_contratacao(organizador, evento, contratacao)
         self._escrever("Contratação cancelada.")
 
     def _substituir_equipe(self, organizador: Organizador, evento: Evento) -> None:
@@ -389,7 +542,12 @@ class MenuEventFlow:
         nova_equipe = self._selecionar_equipe("NOVA EQUIPE")
         if nova_equipe is None:
             return
-        nova = evento.substituir_equipe(organizador, atual, nova_equipe)
+        nova = self.sistema.substituir_equipe(
+            organizador,
+            evento,
+            atual,
+            nova_equipe,
+        )
         self._escrever(
             f"'{atual.equipe.nome}' foi substituída por '{nova.equipe.nome}'."
         )
@@ -439,7 +597,7 @@ class MenuEventFlow:
         if not self._confirmar("Demonstrar interesse neste evento?"):
             self._escrever("Inscrição não realizada.")
             return
-        inscricao = evento.demonstrar_interesse(participante)
+        inscricao = self.sistema.demonstrar_interesse(evento, participante)
         self._escrever(f"Interesse registrado: {inscricao.status.value}.")
 
     def _cancelar_interesse(self, participante: Participante) -> None:
@@ -464,7 +622,7 @@ class MenuEventFlow:
         if not self._confirmar(f"Cancelar o interesse em '{evento.titulo}'?"):
             self._escrever("Cancelamento não realizado.")
             return
-        evento.cancelar_interesse(participante)
+        self.sistema.cancelar_interesse(evento, participante)
         self._escrever("Interesse cancelado.")
 
     def _mostrar_perfil(self, usuario: Usuario) -> None:

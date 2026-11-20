@@ -6,7 +6,7 @@ from modelos import Organizador, Participante, StatusEvento, StatusInscricao
 
 class TestSistemaEventFlow(unittest.TestCase):
     def test_reune_eventos_publicados_e_inscricoes_do_participante(self) -> None:
-        sistema = SistemaEventFlow()
+        sistema = SistemaEventFlow(":memory:")
         organizador = sistema.usuarios.cadastrar(
             "Ana", "ana@email.com", "123", "organizador"
         )
@@ -31,7 +31,7 @@ class TestSistemaEventFlow(unittest.TestCase):
         )
 
     def test_dados_demo_criam_usuarios_evento_e_equipes_uma_unica_vez(self) -> None:
-        sistema = SistemaEventFlow()
+        sistema = SistemaEventFlow(":memory:")
 
         sistema.carregar_dados_demo()
 
@@ -43,7 +43,7 @@ class TestSistemaEventFlow(unittest.TestCase):
             sistema.carregar_dados_demo()
 
     def test_conflito_impede_carga_parcial_dos_dados_demo(self) -> None:
-        sistema = SistemaEventFlow()
+        sistema = SistemaEventFlow(":memory:")
         sistema.cadastrar_equipe("Mídia Local", "Rádio", 100)
 
         with self.assertRaises(ValueError):
@@ -54,7 +54,7 @@ class TestSistemaEventFlow(unittest.TestCase):
         self.assertEqual(1, len(sistema.equipes))
 
     def test_impede_equipes_com_nomes_duplicados(self) -> None:
-        sistema = SistemaEventFlow()
+        sistema = SistemaEventFlow(":memory:")
         sistema.cadastrar_equipe("Mídia Local", "Rádio", 100)
 
         with self.assertRaises(ValueError):
@@ -117,11 +117,13 @@ class TestMenuEventFlow(unittest.TestCase):
                 "1",
                 "s",
                 "0",
+                # Resumo do banco e encerramento.
+                "5",
                 "0",
             ]
         )
         saidas: list[str] = []
-        sistema = SistemaEventFlow()
+        sistema = SistemaEventFlow(":memory:")
         menu = MenuEventFlow(
             sistema=sistema,
             entrada=lambda _: next(entradas),
@@ -136,6 +138,8 @@ class TestMenuEventFlow(unittest.TestCase):
         self.assertIn("Equipe 'Mídia Local' contratada", texto)
         self.assertIn("Interesse registrado: Confirmada.", texto)
         self.assertIn("Interesse cancelado.", texto)
+        self.assertIn("BANCO DE DADOS SQLITE", texto)
+        self.assertIn("usuarios: 2 registro(s)", texto)
         self.assertIn("EventFlow encerrado", texto)
         self.assertEqual(
             StatusInscricao.CANCELADA,
@@ -146,6 +150,7 @@ class TestMenuEventFlow(unittest.TestCase):
         entradas = iter(["9", "2", "ninguem@email.com", "errada", "0"])
         saidas: list[str] = []
         menu = MenuEventFlow(
+            sistema=SistemaEventFlow(":memory:"),
             entrada=lambda _: next(entradas),
             saida=saidas.append,
         )
