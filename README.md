@@ -59,6 +59,12 @@ executar**.
 
 É necessário Python 3.10 ou mais recente e Microsoft Edge, Google Chrome ou
 Chromium instalado. Não é necessário instalar pacotes Python adicionais.
+O projeto e seus testes foram executados no Windows com as versões **3.10.20**
+e **3.14.3** do Python. Outras versões e sistemas não foram verificados nesta
+revisão.
+
+No Windows, o navegador precisa estar em um local padrão de instalação ou
+disponível no `PATH` para que o aplicativo consiga encontrá-lo.
 
 ```powershell
 python .\main.py
@@ -69,14 +75,8 @@ Python inicia um servidor acessível apenas neste computador (`127.0.0.1`), que
 comunica a interface com os modelos e o banco. Mantenha o programa em execução
 enquanto usa a janela; depois de fechá-la, o servidor é encerrado em alguns minutos.
 Se a janela não abrir automaticamente, acesse o endereço exibido no terminal.
-Algumas configurações
-de segurança podem bloquear conexões locais necessárias ao funcionamento.
-
-Se o comando `python` apontar para a Microsoft Store e você tiver o `uv` instalado:
-
-```powershell
-uv run --python 3.14 --no-project python .\main.py
-```
+Algumas configurações de segurança podem bloquear conexões locais necessárias
+ao funcionamento.
 
 Para usar o menu de terminal ou a interface gráfica anterior em Tkinter:
 
@@ -104,17 +104,20 @@ ordem quando o organizador aumenta o número de vagas.
 Ao criar ou editar um evento, informe uma data e hora válidas. Na interface
 principal, selecione esses dados no formulário; no terminal ou no Tkinter, use
 o formato `20/12/2026 às 18:00`. Datas passadas são aceitas. Eventos antigos com
-outros formatos continuam disponíveis, mas sua data precisa ser corrigida ao
-editá-los.
+formatos que não sejam reconhecidos continuam disponíveis, mas sua data precisa
+ser corrigida ao editá-los.
 
-Para experimentar rapidamente, clique em **Carregar demonstração** na tela
-inicial. O exemplo inclui um evento publicado, duas equipes e estas contas:
+Para experimentar rapidamente em um banco novo, clique em **Carregar demonstração**
+na tela inicial. O exemplo inclui um evento publicado, duas equipes e estas contas:
 
 | Perfil | E-mail | Senha |
 | --- | --- | --- |
 | Organizador | `ana@eventflow.com` | `123` |
 | Participante | `bia@eventflow.com` | `123` |
 | Participante | `caio@eventflow.com` | `123` |
+
+A demonstração não é carregada novamente se já estiver presente ou se houver
+conflito com os e-mails ou nomes de equipes usados no exemplo.
 
 Após fechar e reabrir o aplicativo, as informações continuam disponíveis. O
 botão **Resumo do banco** mostra a quantidade de registros em cada tabela.
@@ -158,10 +161,12 @@ Execute os testes com:
 python -m unittest -v
 ```
 
-Os testes da interface Tkinter precisam de acesso a uma tela e são ignorados
-quando ela está indisponível. Os testes da ponte HTML/Python não dependem de rede.
+Para executar a suíte completa, o módulo Tkinter precisa estar disponível na
+instalação do Python. Os testes da interface Tkinter são ignorados se não houver
+acesso a uma tela. Os testes da ponte HTML/Python não dependem de rede.
 O teste do JavaScript precisa do Node.js e é ignorado quando ele não está
-instalado. O aplicativo em si não precisa do Node.js.
+instalado; nesta revisão, foi usada a versão **24.22.1**. O aplicativo em si
+não precisa do Node.js.
 
 ## O que cada teste verifica
 
