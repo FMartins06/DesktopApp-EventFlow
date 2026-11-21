@@ -7,6 +7,7 @@ from modelos import Organizador, Participante, StatusEvento, StatusInscricao
 class TestSistemaEventFlow(unittest.TestCase):
     def test_reune_eventos_publicados_e_inscricoes_do_participante(self) -> None:
         sistema = SistemaEventFlow(":memory:")
+        self.addCleanup(sistema.banco.fechar)
         organizador = sistema.usuarios.cadastrar(
             "Ana", "ana@email.com", "123", "organizador"
         )
@@ -17,7 +18,7 @@ class TestSistemaEventFlow(unittest.TestCase):
         self.assertIsInstance(participante, Participante)
 
         evento = organizador.criar_evento(
-            "Festival", "Música", "20/12/2026", "Praça", "Cultura", 10
+            "Festival", "Música", "20/12/2026 às 18:00", "Praça", "Cultura", 10
         )
         self.assertEqual((), sistema.eventos_publicados)
         evento.publicar(organizador)
@@ -32,6 +33,7 @@ class TestSistemaEventFlow(unittest.TestCase):
 
     def test_dados_demo_criam_usuarios_evento_e_equipes_uma_unica_vez(self) -> None:
         sistema = SistemaEventFlow(":memory:")
+        self.addCleanup(sistema.banco.fechar)
 
         sistema.carregar_dados_demo()
 
@@ -44,6 +46,7 @@ class TestSistemaEventFlow(unittest.TestCase):
 
     def test_conflito_impede_carga_parcial_dos_dados_demo(self) -> None:
         sistema = SistemaEventFlow(":memory:")
+        self.addCleanup(sistema.banco.fechar)
         sistema.cadastrar_equipe("Mídia Local", "Rádio", 100)
 
         with self.assertRaises(ValueError):
@@ -55,6 +58,7 @@ class TestSistemaEventFlow(unittest.TestCase):
 
     def test_impede_equipes_com_nomes_duplicados(self) -> None:
         sistema = SistemaEventFlow(":memory:")
+        self.addCleanup(sistema.banco.fechar)
         sistema.cadastrar_equipe("Mídia Local", "Rádio", 100)
 
         with self.assertRaises(ValueError):
@@ -124,6 +128,7 @@ class TestMenuEventFlow(unittest.TestCase):
         )
         saidas: list[str] = []
         sistema = SistemaEventFlow(":memory:")
+        self.addCleanup(sistema.banco.fechar)
         menu = MenuEventFlow(
             sistema=sistema,
             entrada=lambda _: next(entradas),
@@ -149,8 +154,10 @@ class TestMenuEventFlow(unittest.TestCase):
     def test_opcao_invalida_e_login_incorreto_nao_encerram_menu(self) -> None:
         entradas = iter(["9", "2", "ninguem@email.com", "errada", "0"])
         saidas: list[str] = []
+        sistema = SistemaEventFlow(":memory:")
+        self.addCleanup(sistema.banco.fechar)
         menu = MenuEventFlow(
-            sistema=SistemaEventFlow(":memory:"),
+            sistema=sistema,
             entrada=lambda _: next(entradas),
             saida=saidas.append,
         )

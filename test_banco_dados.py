@@ -14,6 +14,49 @@ from modelos import (
 
 
 class TestPersistenciaSQLite(unittest.TestCase):
+    def test_aumento_de_vagas_salva_promocao_na_reabertura(self) -> None:
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "teste.db"
+            sistema = SistemaEventFlow(caminho)
+            org = sistema.cadastrar_usuario("Ana", "ana@teste.com", "123", "organizador")
+            bia = sistema.cadastrar_usuario("Bia", "bia@teste.com", "123", "participante")
+            caio = sistema.cadastrar_usuario("Caio", "caio@teste.com", "123", "participante")
+            evento = sistema.criar_evento(org, "Evento", "Descrição", "20/12/2026 às 18:00", "Praça", "Cultura", 1)
+            sistema.publicar_evento(org, evento)
+            sistema.demonstrar_interesse(evento, bia)
+            sistema.demonstrar_interesse(evento, caio)
+            sistema.editar_evento(org, evento, evento.titulo, evento.descricao, evento.data_hora,
+                                  evento.local, evento.categoria, 2)
+            sistema.banco.fechar()
+            reaberto = SistemaEventFlow(caminho)
+            try:
+                self.assertEqual([StatusInscricao.CONFIRMADA, StatusInscricao.CONFIRMADA],
+                                 [i.status for i in reaberto.eventos[0].inscricoes])
+            finally:
+                reaberto.banco.fechar()
+
+    def test_reabre_evento_com_data_antiga_e_exige_correcao_ao_editar(self) -> None:
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "teste.db"
+            sistema = SistemaEventFlow(caminho)
+            org = sistema.cadastrar_usuario("Ana", "ana@teste.com", "123", "organizador")
+            sistema.criar_evento(org, "Evento", "Descrição", "20/12/2026 às 18:00", "Praça", "Cultura", 1)
+            sistema.banco._conexao.execute("UPDATE eventos SET data_hora = ?", ("20/12 às 18h",))
+            sistema.banco._conexao.commit()
+            sistema.banco.fechar()
+            reaberto = SistemaEventFlow(caminho)
+            try:
+                evento = reaberto.eventos[0]
+                self.assertEqual("20/12 às 18h", evento.data_hora)
+                with self.assertRaises(ValueError):
+                    reaberto.editar_evento(evento.organizador, evento, evento.titulo, evento.descricao,
+                                           evento.data_hora, evento.local, evento.categoria, 1)
+                reaberto.editar_evento(evento.organizador, evento, evento.titulo, evento.descricao,
+                                       "2026-12-20T18:00", evento.local, evento.categoria, 1)
+                self.assertEqual("20/12/2026 às 18:00", evento.data_hora)
+            finally:
+                reaberto.banco.fechar()
+
     def test_dados_completos_continuam_apos_fechar_e_reabrir(self) -> None:
         with tempfile.TemporaryDirectory() as pasta:
             caminho = Path(pasta) / "teste_eventflow.db"
@@ -95,6 +138,7 @@ class TestPersistenciaSQLite(unittest.TestCase):
 
     def test_esquema_ativa_chaves_estrangeiras(self) -> None:
         sistema = SistemaEventFlow(":memory:")
+        self.addCleanup(sistema.banco.fechar)
 
         chaves_ativas = sistema.banco._conexao.execute(
             "PRAGMA foreign_keys"
