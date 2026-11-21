@@ -411,7 +411,7 @@ class MenuEventFlow:
             organizador=organizador,
             titulo=self._ler_obrigatorio("Título: "),
             descricao=self._ler_obrigatorio("Descrição: "),
-            data_hora=self._ler_obrigatorio("Data e hora: "),
+            data_hora=self._ler_obrigatorio("Data e hora (ex.: 20/12/2026 às 18:00): "),
             local=self._ler_obrigatorio("Local: "),
             categoria=self._ler_obrigatorio("Categoria: "),
             vagas=self._ler_inteiro_positivo("Quantidade de vagas: "),

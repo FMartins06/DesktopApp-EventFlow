@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EventFlow | Gestão de eventos</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img id="brand-logo" class="brand-logo" alt="Logo do EventFlow" hidden>
+        <div id="brand-fallback" class="brand-fallback"><span class="brand-mark">✦</span><span>eventflow<span class="brand-dot">.</span><small>GESTÃO DE EVENTOS</small></span></div>
+      </div>
+      <div class="nav-label">MENU PRINCIPAL</div>
+      <nav id="nav" aria-label="Navegação principal"></nav>
+      <div class="sidebar-bottom"><div class="sidebar-orb">✦</div><strong>Grandes ideias merecem<br>grandes eventos.</strong><span>Planeje, conecte e celebre.</span></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><span id="breadcrumb">VISÃO GERAL / INÍCIO</span><div id="account"></div></header>
+      <div id="content" class="content" aria-live="polite"></div>
+    </main>
+  </div>
+  <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
+  <div id="toast" role="status"></div>
+</body>
+</html>

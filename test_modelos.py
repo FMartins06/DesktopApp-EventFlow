@@ -129,6 +129,39 @@ class TestEvento(unittest.TestCase):
         self.assertEqual(StatusInscricao.CANCELADA, primeira.status)
         self.assertEqual(StatusInscricao.CONFIRMADA, segunda.status)
 
+    def test_aumento_de_vagas_promove_lista_em_ordem(self) -> None:
+        self.publicar()
+        davi = Participante("Davi", "davi@email.com", "123")
+        eva = Participante("Eva", "eva@email.com", "123")
+        self.evento.demonstrar_interesse(self.bia)
+        espera_caio = self.evento.demonstrar_interesse(self.caio)
+        espera_davi = self.evento.demonstrar_interesse(davi)
+        espera_eva = self.evento.demonstrar_interesse(eva)
+        self.evento.cancelar_interesse(davi)
+
+        self.evento.editar(self.organizador, self.evento.titulo, self.evento.descricao,
+                           self.evento.data_hora, self.evento.local, self.evento.categoria, 2)
+        self.assertEqual(StatusInscricao.CONFIRMADA, espera_caio.status)
+        self.assertEqual(StatusInscricao.CANCELADA, espera_davi.status)
+        self.assertEqual(StatusInscricao.LISTA_ESPERA, espera_eva.status)
+
+        self.evento.editar(self.organizador, self.evento.titulo, self.evento.descricao,
+                           self.evento.data_hora, self.evento.local, self.evento.categoria, 4)
+        self.assertEqual(StatusInscricao.CONFIRMADA, espera_eva.status)
+        self.assertEqual(1, self.evento.vagas_disponiveis)
+
+    def test_valida_e_normaliza_data_e_hora(self) -> None:
+        for data in ("31/02/2026 às 18:00", "20/12/2026 às 25:00", "20/12", "texto"):
+            with self.subTest(data=data), self.assertRaises(ValueError):
+                self.organizador.criar_evento("Evento", "Descrição", data, "Local", "Cultura", 1)
+        novo = self.organizador.criar_evento(
+            "Evento", "Descrição", "2026-12-20T18:30", "Local", "Cultura", 1
+        )
+        self.assertEqual("20/12/2026 às 18:30", novo.data_hora)
+        with self.assertRaises(ValueError):
+            novo.editar(self.organizador, "Alterado", "Descrição", "29/02/2025 às 10:00", "Local", "Cultura", 1)
+        self.assertEqual("Evento", novo.titulo)
+
     def test_contrata_equipe_por_composicao_e_impede_duplicidade(self) -> None:
         self.publicar()
         contratacao = self.evento.contratar_equipe(self.organizador, self.equipe_a)
@@ -202,7 +235,7 @@ class TestRelatorioEventos(unittest.TestCase):
     def test_relatorio_depende_dos_eventos_recebidos_sem_armazena_los(self) -> None:
         organizador = Organizador("Ana", "ana@email.com", "123")
         evento = organizador.criar_evento(
-            "Festival", "Música", "20/12/2026", "Praça", "Cultura", 10
+            "Festival", "Música", "20/12/2026 às 18:00", "Praça", "Cultura", 10
         )
         evento.publicar(organizador)
 

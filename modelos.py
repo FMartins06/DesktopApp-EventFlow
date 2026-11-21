@@ -8,11 +8,22 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 import hashlib
 import hmac
 import secrets
 from typing import Iterable
+
+
+def interpretar_data_hora(valor: str) -> datetime:
+    """Interpreta os formatos usados pelas interfaces do EventFlow."""
+    for formato in ("%d/%m/%Y às %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%dT%H:%M"):
+        try:
+            return datetime.strptime(valor.strip(), formato)
+        except ValueError:
+            pass
+    raise ValueError("Informe uma data e hora válidas, por exemplo 20/12/2026 às 18:00.")
 
 
 class StatusEvento(Enum):
@@ -115,6 +126,8 @@ class Organizador(Usuario):
         local: str,
         categoria: str,
         vagas: int,
+        *,
+        _restaurar: bool = False,
     ) -> Evento:
         evento = Evento(
             titulo=titulo,
@@ -124,6 +137,7 @@ class Organizador(Usuario):
             categoria=categoria,
             vagas=vagas,
             organizador=self,
+            _restaurar=_restaurar,
         )
         self._eventos.append(evento)
         return evento
@@ -247,6 +261,8 @@ class Evento:
         categoria: str,
         vagas: int,
         organizador: Organizador,
+        *,
+        _restaurar: bool = False,
     ) -> None:
         self._validar_dados(
             titulo,
@@ -255,13 +271,15 @@ class Evento:
             local,
             categoria,
             vagas,
+            validar_data=not _restaurar,
         )
         if not isinstance(organizador, Organizador):
             raise ValueError("O evento precisa ter um organizador.")
 
         self.titulo = titulo.strip()
         self.descricao = descricao.strip()
-        self.data_hora = data_hora.strip()
+        self.data_hora = (data_hora.strip() if _restaurar else
+                          interpretar_data_hora(data_hora).strftime("%d/%m/%Y às %H:%M"))
         self.local = local.strip()
         self.categoria = categoria.strip()
         self.vagas = vagas
@@ -279,10 +297,14 @@ class Evento:
         local: str,
         categoria: str,
         vagas: int,
+        *,
+        validar_data: bool = True,
     ) -> None:
         campos = [titulo, descricao, data_hora, local, categoria]
         if any(not campo.strip() for campo in campos):
             raise ValueError("Os dados textuais do evento são obrigatórios.")
+        if validar_data:
+            interpretar_data_hora(data_hora)
         if not isinstance(vagas, int) or isinstance(vagas, bool) or vagas < 1:
             raise ValueError("O evento precisa ter pelo menos uma vaga.")
 
@@ -343,10 +365,20 @@ class Evento:
 
         self.titulo = titulo.strip()
         self.descricao = descricao.strip()
-        self.data_hora = data_hora.strip()
+        self.data_hora = interpretar_data_hora(data_hora).strftime("%d/%m/%Y às %H:%M")
         self.local = local.strip()
         self.categoria = categoria.strip()
         self.vagas = vagas
+        self._promover_lista_espera()
+
+    def _promover_lista_espera(self) -> None:
+        vagas_livres = self.vagas_disponiveis
+        for inscricao in self._inscricoes:
+            if vagas_livres == 0:
+                break
+            if inscricao.status == StatusInscricao.LISTA_ESPERA:
+                inscricao.status = StatusInscricao.CONFIRMADA
+                vagas_livres -= 1
 
     def demonstrar_interesse(self, participante: Participante) -> Inscricao:
         if not isinstance(participante, Participante):
@@ -386,16 +418,7 @@ class Evento:
         inscricao.status = StatusInscricao.CANCELADA
 
         if era_confirmada:
-            proxima = next(
-                (
-                    item
-                    for item in self._inscricoes
-                    if item.status == StatusInscricao.LISTA_ESPERA
-                ),
-                None,
-            )
-            if proxima is not None:
-                proxima.status = StatusInscricao.CONFIRMADA
+            self._promover_lista_espera()
         return inscricao
 
     def contratar_equipe(

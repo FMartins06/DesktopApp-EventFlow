@@ -88,6 +88,7 @@ class BancoDados:
                 local=linha["local"],
                 categoria=linha["categoria"],
                 vagas=linha["vagas"],
+                _restaurar=True,
             )
             evento.id_banco = linha["id"]
             evento.status = StatusEvento[linha["status"]]
