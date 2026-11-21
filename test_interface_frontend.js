@@ -7,6 +7,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const elementos = {};
+const requisicoes = [];
 const documento = {
   querySelector(seletor) {
     return elementos[seletor] ||= {
@@ -44,12 +45,21 @@ const verificacoes = `
   eventoTeste.data_hora = "data antiga";
   formEvento(eventoTeste);
   assert.match(document.querySelector("#modal-content").innerHTML, /data antiga/);
+  token = "segredo";
+  registrarPresenca();
+  assert.equal(requisicoes[0].url, "/api/presenca");
+  assert.equal(requisicoes[0].opcoes.headers["X-EventFlow-Token"], "segredo");
 `;
 
 vm.runInNewContext(codigo + verificacoes, {
   assert,
   document: documento,
-  fetch: () => new Promise(() => {}),
+  requisicoes,
+  fetch: (url, opcoes) => {
+    if (url === "/api/estado") return new Promise(() => {});
+    requisicoes.push({url, opcoes});
+    return Promise.resolve({ok: true});
+  },
   setTimeout,
   clearTimeout,
 });

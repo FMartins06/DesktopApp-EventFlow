@@ -11,8 +11,8 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from aplicacao import SistemaEventFlow
@@ -20,6 +20,7 @@ from modelos import Organizador, Participante, StatusEvento, interpretar_data_ho
 
 
 PASTA_INTERFACE = Path(__file__).with_name("interface")
+TEMPO_SEM_INTERFACE = 180
 
 
 class AplicacaoWeb:
@@ -162,6 +163,7 @@ class ServidorEventFlow(HTTPServer):
         super().__init__(endereco, Requisicoes)
         self.aplicacao = AplicacaoWeb(sistema)
         self.token = secrets.token_urlsafe(32)
+        self.ultima_presenca = time.monotonic()
 
 
 class Requisicoes(BaseHTTPRequestHandler):
@@ -204,6 +206,9 @@ class Requisicoes(BaseHTTPRequestHandler):
         if (not self._host_valido() or self.headers.get("Origin") != origem or
                 not secrets.compare_digest(self.headers.get("X-EventFlow-Token", ""), self.server.token)):
             return self._json(403, {"erro": "Requisição não autorizada."})
+        if self.path == "/api/presenca":
+            self.server.ultima_presenca = time.monotonic()
+            return self._json(200, {"ok": True})
         if self.path != "/api/acao":
             return self._json(404, {"erro": "Ação não encontrada."})
         try:
@@ -231,6 +236,21 @@ def localizar_navegador():
     return next((str(c) for c in caminhos if c.is_file()), None)
 
 
+def acompanhar_interface(servidor, parar, relogio=time.monotonic):
+    """Encerra o servidor após um período sem a janela do aplicativo."""
+    ultimo_exame = relogio()
+    while not parar.wait(5):
+        agora = relogio()
+        intervalo = agora - ultimo_exame
+        if intervalo > 30:
+            # Uma pausa longa pode indicar que o computador estava suspenso.
+            servidor.ultima_presenca += intervalo
+        ultimo_exame = agora
+        if agora - servidor.ultima_presenca > TEMPO_SEM_INTERFACE:
+            servidor.shutdown()
+            return
+
+
 def executar(caminho_banco=None):
     navegador = localizar_navegador()
     if not navegador:
@@ -238,15 +258,19 @@ def executar(caminho_banco=None):
     sistema = SistemaEventFlow() if caminho_banco is None else SistemaEventFlow(caminho_banco)
     servidor = ServidorEventFlow(("127.0.0.1", 0), sistema)
     endereco = f"http://127.0.0.1:{servidor.server_port}/"
-    with tempfile.TemporaryDirectory(prefix="eventflow-") as perfil:
+    parar = threading.Event()
+    try:
+        processo = subprocess.Popen([navegador, f"--app={endereco}"])
+        # Alguns navegadores transferem a janela para outro processo e encerram
+        # este primeiro processo mesmo com a janela aberta.
+        threading.Thread(target=processo.wait, daemon=True).start()
+        threading.Thread(target=acompanhar_interface, args=(servidor, parar), daemon=True).start()
+        print(f"EventFlow iniciado. Se necessário, abra: {endereco}", flush=True)
         try:
-            processo = subprocess.Popen([navegador, f"--app={endereco}", f"--user-data-dir={perfil}",
-                                         "--no-first-run", "--no-default-browser-check"])
-            def aguardar_janela():
-                processo.wait()
-                servidor.shutdown()
-            threading.Thread(target=aguardar_janela, daemon=True).start()
             servidor.serve_forever()
-        finally:
-            servidor.server_close()
-            sistema.banco.fechar()
+        except KeyboardInterrupt:
+            pass
+    finally:
+        parar.set()
+        servidor.server_close()
+        sistema.banco.fechar()

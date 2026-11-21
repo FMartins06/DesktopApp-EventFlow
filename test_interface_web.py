@@ -8,9 +8,10 @@ import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import MagicMock, patch
 
 from aplicacao import SistemaEventFlow
-from interface_web import AplicacaoWeb, Requisicoes
+from interface_web import AplicacaoWeb, Requisicoes, acompanhar_interface
 
 
 class TestInterfaceWeb(unittest.TestCase):
@@ -83,13 +84,14 @@ class TestInterfaceWeb(unittest.TestCase):
         resultado = subprocess.run([shutil.which("node"), str(script)], capture_output=True, text=True)
         self.assertEqual(0, resultado.returncode, resultado.stderr)
 
-    def _post(self, token="segredo", origem="http://127.0.0.1:12345"):
+    def _post(self, token="segredo", origem="http://127.0.0.1:12345", caminho="/api/acao"):
         corpo = json.dumps({"acao": "resumo", "dados": {}}).encode()
         req = object.__new__(Requisicoes)
-        req.server = SimpleNamespace(server_port=12345, token="segredo", aplicacao=self.app)
+        req.server = SimpleNamespace(server_port=12345, token="segredo", aplicacao=self.app, ultima_presenca=0)
+        self.servidor_simulado = req.server
         req.headers = {"Host": "127.0.0.1:12345", "Origin": origem,
                        "X-EventFlow-Token": token, "Content-Length": str(len(corpo))}
-        req.path = "/api/acao"
+        req.path = caminho
         req.rfile = io.BytesIO(corpo)
         req.wfile = io.BytesIO()
         resposta = []
@@ -105,6 +107,48 @@ class TestInterfaceWeb(unittest.TestCase):
         status, resposta = self._post()
         self.assertEqual(status, 200)
         self.assertEqual(resposta["resultado"]["usuarios"], 0)
+
+    def test_presenca_exige_token_valido(self):
+        with patch("interface_web.time.monotonic", return_value=123.0):
+            self.assertEqual(self._post(token="errado", caminho="/api/presenca")[0], 403)
+            self.assertEqual(self.servidor_simulado.ultima_presenca, 0)
+            self.assertEqual(self._post(caminho="/api/presenca")[0], 200)
+            self.assertEqual(self.servidor_simulado.ultima_presenca, 123.0)
+
+    def test_monitor_encerra_quando_interface_para_de_responder(self):
+        servidor = MagicMock(ultima_presenca=0)
+        parar = MagicMock()
+        parar.wait.side_effect = [False] * 37
+        relogio = iter(range(0, 186, 5))
+        acompanhar_interface(servidor, parar, relogio=lambda: next(relogio))
+        servidor.shutdown.assert_called_once()
+
+    def test_monitor_tolera_suspensao_do_computador(self):
+        servidor = MagicMock(ultima_presenca=0)
+        parar = MagicMock()
+        parar.wait.side_effect = [False, True]
+        relogio = iter([0, 600])
+        acompanhar_interface(servidor, parar, relogio=lambda: next(relogio))
+        servidor.shutdown.assert_not_called()
+        self.assertEqual(600, servidor.ultima_presenca)
+
+    def test_servidor_nao_depende_do_processo_inicial_do_navegador(self):
+        servidor = MagicMock(server_port=12345)
+        processo = MagicMock()
+        processo.wait.return_value = 0
+        sistema = MagicMock()
+        with patch("interface_web.localizar_navegador", return_value="edge"), \
+             patch("interface_web.SistemaEventFlow", return_value=sistema), \
+             patch("interface_web.ServidorEventFlow", return_value=servidor), \
+             patch("interface_web.subprocess.Popen", return_value=processo) as abrir, \
+             patch("builtins.print"):
+            from interface_web import executar
+            executar()
+        abrir.assert_called_once_with(["edge", "--app=http://127.0.0.1:12345/"])
+        servidor.serve_forever.assert_called_once()
+        servidor.shutdown.assert_not_called()
+        servidor.server_close.assert_called_once()
+        sistema.banco.fechar.assert_called_once()
 
 
 if __name__ == "__main__":

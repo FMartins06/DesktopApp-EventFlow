@@ -32,6 +32,11 @@ async function atualizar() {
   estado = dados.estado;
 }
 
+function registrarPresenca() {
+  return fetch("/api/presenca", {method:"POST", headers:{"X-EventFlow-Token":token}})
+    .catch(() => {});
+}
+
 async function acao(nome, dados = {}) {
   const resposta = await fetch("/api/acao", {method:"POST", headers:{"Content-Type":"application/json", "X-EventFlow-Token":token}, body:JSON.stringify({acao:nome, dados})});
   const resultado = await resposta.json();
@@ -222,4 +227,8 @@ document.addEventListener("submit", async (evento) => {
   } catch (erro) { aviso(erro.message, true); botaoSalvar.disabled = false; }
 });
 
-atualizar().then(render).catch(erro => { $("#content").innerHTML = `<div class="panel panel-pad">${esc(erro.message)}</div>`; });
+atualizar().then(() => {
+  render();
+  registrarPresenca();
+  setInterval(registrarPresenca, 10000);
+}).catch(erro => { $("#content").innerHTML = `<div class="panel panel-pad">${esc(erro.message)}</div>`; });

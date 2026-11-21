@@ -67,7 +67,9 @@ python .\main.py
 O aplicativo abre em uma janela própria do navegador em modo de aplicativo. O
 Python inicia um servidor acessível apenas neste computador (`127.0.0.1`), que
 comunica a interface com os modelos e o banco. Mantenha o programa em execução
-enquanto usa a janela; ao fechá-la, o servidor é encerrado. Algumas configurações
+enquanto usa a janela; depois de fechá-la, o servidor é encerrado em alguns minutos.
+Se a janela não abrir automaticamente, acesse o endereço exibido no terminal.
+Algumas configurações
 de segurança podem bloquear conexões locais necessárias ao funcionamento.
 
 Se o comando `python` apontar para a Microsoft Store e você tiver o `uv` instalado:
@@ -212,3 +214,7 @@ instalado. O aplicativo em si não precisa do Node.js.
 - `test_protecao_de_requisicao_e_resumo`: confere a proteção das requisições e o resumo.
 - `test_data_invalida_e_formato_para_edicao`: valida a data e prepara o campo de edição.
 - `test_formulario_e_botoes_da_interface_principal`: verifica o formulário e os botões usando `test_interface_frontend.js`.
+- `test_presenca_exige_token_valido`: verifica a proteção da comunicação com a interface.
+- `test_monitor_encerra_quando_interface_para_de_responder`: encerra o servidor após fechar a interface.
+- `test_monitor_tolera_suspensao_do_computador`: mantém o servidor após uma pausa longa.
+- `test_servidor_nao_depende_do_processo_inicial_do_navegador`: verifica a abertura quando o navegador muda de processo.
